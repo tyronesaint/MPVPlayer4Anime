@@ -1,0 +1,112 @@
+name: Build VLC for iOS with Anime4K
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build VLC-iOS
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+
+    - name: Install Ruby Gems
+      run: |
+        sudo gem install cocoapods
+
+    - name: Install Dependencies
+      run: |
+        cd vlc-ios
+        pod install
+
+    - name: Build VLC-iOS (Debug)
+      run: |
+        cd vlc-ios
+        xcodebuild -workspace VLC.xcworkspace \
+          -scheme VLC-iOS \
+          -configuration Debug \
+          -sdk iphonesimulator \
+          -destination 'platform=iOS Simulator,name=iPhone 15' \
+          clean build \
+          CODE_SIGNING_ALLOWED=NO \
+          | xcpretty
+
+    - name: Build VLC-iOS (Release)
+      run: |
+        cd vlc-ios
+        xcodebuild -workspace VLC.xcworkspace \
+          -scheme VLC-iOS \
+          -configuration Release \
+          -sdk iphonesimulator \
+          -destination 'platform=iOS Simulator,name=iPhone 15' \
+          clean build \
+          CODE_SIGNING_ALLOWED=NO \
+          | xcpretty
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: VLC-iOS-App
+        path: |
+          ~/Library/Developer/Xcode/DerivedData/**/Build/Products/Debug-iphonesimulator/VLC-iOS.app
+          ~/Library/Developer/Xcode/DerivedData/**/Build/Products/Release-iphonesimulator/VLC-iOS.app
+        retention-days: 7
+
+    - name: Archive Build
+      if: success()
+      run: |
+        cd vlc-ios
+        # Archive the build
+        xcodebuild archive \
+          -workspace VLC.xcworkspace \
+          -scheme VLC-iOS \
+          -configuration Release \
+          -archivePath build/VLC-iOS.xcarchive \
+          -sdk iphoneos \
+          CODE_SIGNING_ALLOWED=NO \
+          | xcpretty
+
+    - name: Export Archive
+      if: success()
+      run: |
+        cd vlc-ios
+        # Export IPA (for manual signing)
+        xcodebuild -exportArchive \
+          -archivePath build/VLC-iOS.xcarchive \
+          -exportPath build/export \
+          -exportOptionsPlist exportOptions.plist \
+          | xcpretty || echo "Export skipped (requires signing)"
+
+    - name: Upload Archive
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: VLC-iOS-Archive
+        path: vlc-ios/build/
+        retention-days: 30
+
+    - name: Build Summary
+      if: always()
+      run: |
+        echo "## 🎬 VLC for iOS - Anime4K Edition" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Features" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Anime4K Shader Support" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ WebDAV Integration (Coming Soon)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Custom UI Design" >> $GITHUB_STEP_SUMMARY
